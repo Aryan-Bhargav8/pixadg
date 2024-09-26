@@ -6,7 +6,8 @@ class PixAPI {
 
   Future<List<dynamic>> fetchImages({ String query = ''}) async {
     final response = await http.get(
-      Uri.parse('https://pixabay.com/api/?key=$apiKey&q=$query&image_type=photo'),
+      Uri.parse('https://pixabay.com/api/?key=$apiKey&q=$query&image_type=photo'
+      '&order=latest&per_page=70'),
     );
 
     if (response.statusCode == 200) {
