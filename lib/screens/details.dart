@@ -1,15 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:pixadg/services/pixapi.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
-import 'package:http/http.dart' as http;
+
 import 'package:shared_preferences/shared_preferences.dart';
-
-
 
 class DetailsScreen extends StatefulWidget {
   final dynamic imageData;
@@ -22,17 +16,48 @@ class DetailsScreen extends StatefulWidget {
 
 class _DetailsScreenState extends State<DetailsScreen> {
   bool isFavorite = false;
+  List<dynamic> similarImages = [];
+  bool isLoadingSimilar = true;
 
   @override
   void initState() {
     super.initState();
     checkIfFavorite();
+    fetchSimilarImages();
+  }
+
+  void fetchSimilarImages() async {
+    setState(() {
+      isLoadingSimilar = true;
+    });
+
+    try {
+      final PixAPI pixAPI = PixAPI();
+      String tags = widget.imageData['tags'];
+
+      List<dynamic> fetchedImages = await pixAPI.fetchImages(query: tags);
+
+      fetchedImages
+          .removeWhere((element) => element['id'] == widget.imageData['id']);
+
+      setState(() {
+        similarImages = fetchedImages;
+        isLoadingSimilar = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoadingSimilar = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
   }
 
   void checkIfFavorite() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    List<String>? favorites = prefs.getStringList('favorites') ??[];
-    String imageId = widget.imageData;
+    List<String>? favorites = prefs.getStringList('favorites') ?? [];
+    String imageId = widget.imageData['id'].toString();
 
     setState(() {
       isFavorite = favorites.contains(imageId);
@@ -42,7 +67,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
   void toggleFavorite() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     List<String>? favorites = prefs.getStringList('favorites') ?? [];
-    String imageId = jsonEncode(widget.imageData);
+    String imageId = widget.imageData['id'].toString();
 
     if (isFavorite) {
       favorites.remove(imageId);
@@ -57,85 +82,128 @@ class _DetailsScreenState extends State<DetailsScreen> {
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(isFavorite ? 'Added to Favorites' : 'Removed from Favorites')),
+      SnackBar(
+          content: Text(
+              isFavorite ? 'Added to Favorites' : 'Removed from Favorites')),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Image Details'),
-        actions: [
-          IconButton(
-            icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
-            onPressed: toggleFavorite,
-          ),
-          IconButton(
-            icon: Icon(Icons.share),
-            onPressed: () {
-              Share.share(widget.imageData['largeImageURL']);
-            },
-          )
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Hero(
+      body: CustomScrollView(slivers: [
+        SliverAppBar(
+          expandedHeight: MediaQuery.of(context).size.height * 0.6,
+          floating: true,
+          pinned: true,
+          flexibleSpace: FlexibleSpaceBar(
+            background: Hero(
               tag: widget.imageData['id'],
               child: CachedNetworkImage(
                 imageUrl: widget.imageData['largeImageURL'],
-                placeholder: (context, url) => Container(
-                  height: 300,
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                errorWidget: (context, url, error) => Icon(Icons.error),
                 fit: BoxFit.cover,
               ),
             ),
-            Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Author: ${widget.imageData['user']}',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 8),
-                    Text('Tags: ${widget.imageData['tags']}'),
-                    SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        await downloadImage(context);
-                      },
-                      icon: Icon(Icons.download),
-                      label: Text('Download Image'),
-                    )
-                  ],
-                )),
-          ],
+          ),
         ),
-      ),
+        SliverToBoxAdapter(
+            child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundImage:
+                        NetworkImage(widget.imageData['userImageURL']),
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    widget.imageData['user'],
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+              Text(
+                widget.imageData['tags'],
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+              SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                        isFavorite ? Icons.favorite : Icons.favorite_border),
+                    onPressed: toggleFavorite,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.share),
+                    onPressed: () {
+                      Share.share(widget.imageData['largeImageURL']);
+                    },
+                  ),
+                  
+                ],
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Similar Images',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 30),
+              Container(
+                height: 250,
+                child: isLoadingSimilar
+                    ? Center(child: CircularProgressIndicator())
+                    : similarImages.isEmpty
+                        ? Text('No similar images found.')
+                        : ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: similarImages.length,
+                            itemBuilder: (context, index) {
+                              final image = similarImages[index];
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8.0),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    // Navigate to DetailsScreen for the similar image
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            DetailsScreen(imageData: image),
+                                      ),
+                                    );
+                                  },
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: CachedNetworkImage(
+                                      imageUrl: image[
+                                          'previewURL'], // Use 'previewURL' for thumbnails
+                                      width: 200,
+                                      height: 200,
+                                      fit: BoxFit.cover,
+                                      placeholder: (context, url) => Container(
+                                        color: Colors.grey[200],
+                                      ),
+                                      errorWidget: (context, url, error) =>
+                                          Icon(Icons.error),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+              ),
+            ],
+          ),
+        )),
+      ]),
     );
   }
 
-  Future<void> downloadImage(BuildContext context) async {
-    //checking Storage permission
-    if (await Permission.storage.request().isGranted) {
-      var response = await http.get(Uri.parse(widget.imageData['largeImageURL']));
-      var documentDirectory = await getExternalStorageDirectory();
-      String path = documentDirectory!.path;
-      File file = File('$path/${widget.imageData['id']}.jpg');
-      file.writeAsBytesSync(response.bodyBytes);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Image downloaded to $path')));
-    } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Permission denied')));
-    }
-  }
+  
 }
