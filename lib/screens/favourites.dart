@@ -2,10 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import 'details.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:pixadg/services/pixapi.dart';
 
 class FavoritesScreen extends StatefulWidget {
   @override
@@ -13,7 +13,10 @@ class FavoritesScreen extends StatefulWidget {
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
-  List<dynamic> favoriteImages = [];
+  List<String> favoriteIDs = [];
+  List<Map<String, dynamic>> favoriteImages = [];
+  bool isLoading = true;
+  final PixAPI pixAPI = PixAPI();
 
   @override
   void initState() {
@@ -22,18 +25,46 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   void loadFavorites() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    List<String> favorites = prefs.getStringList('favorites') ?? [];
     setState(() {
-      favoriteImages = favorites.map((item) => json.decode(item)).toList();
-      print('Favorite Images: $favoriteImages');
+      isLoading = true;
     });
+
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    favoriteIDs = prefs.getStringList('favorites') ?? [];
+
+    favoriteImages = [];   
+    for (String id in favoriteIDs) {
+      try{
+        var imageData = await pixAPI.fetchImageById(id);
+        if(imageData != null) {
+          favoriteImages.add(imageData);
+        }
+      } catch (e) {
+        print('Error loading favorite image: $e');
+      }
+    }
+    setState(() {
+      isLoading = false;
+    });
+  }
+
+  Future<Map<String, dynamic>?> fetchImageData(String id) async {
+    try {
+      List<dynamic> imageData = await pixAPI.fetchImages(query: id);
+      if (imageData.isNotEmpty) {
+        return imageData.first;
+      }
+    } catch (e) {
+      print('Error fetching image data: $e');
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Color.fromARGB(255, 214, 180, 94),
         title: Text('Favorite Images'),
       ),
       body: favoriteImages.isEmpty
@@ -81,3 +112,4 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 }
+
