@@ -1,3 +1,5 @@
+// ignore_for_file: file_names, prefer_const_constructors, sized_box_for_whitespace
+
 import 'package:flutter/material.dart';
 import '../services/pixapi.dart';
 import 'details.dart';
