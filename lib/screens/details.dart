@@ -183,8 +183,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
                                     child: CachedNetworkImage(
-                                      imageUrl: image[
-                                          'previewURL'], // Use 'previewURL' for thumbnails
+                                      imageUrl: image['previewURL'], 
                                       width: 200,
                                       height: 200,
                                       fit: BoxFit.cover,
